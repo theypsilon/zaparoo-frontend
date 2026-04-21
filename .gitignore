@@ -53,6 +53,9 @@ output/
 *.creator.user
 *.user
 
+# Local environment — secrets, never commit
+.env
+
 # AI agent tooling — local only, not shared
 CLAUDE.md
 .claude/

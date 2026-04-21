@@ -62,6 +62,18 @@ cmake --build build --target all_qmllint    # QML linting
 pre-commit run --all-files
 ```
 
+# Deploy to MiSTer
+
+```bash
+./scripts/deploy-mister.sh
+```
+
+Builds the ARM32 binary, backs up the existing binary on the device to
+`zaparoo-launcher.bak`, kills any running instance, and SCPs the new binary
+over. Reads `MISTER_IP` from a `.env` file in the project root — create it
+with `echo 'MISTER_IP=<ip>' > .env` if it doesn't exist yet. When the user
+asks to deploy, run this script.
+
 For ARM32 / MiSTer builds and deploy bundle, see @docs/building.md.
 
 ## IMPORTANT: Repo Policy
