@@ -19,6 +19,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # The ARM32 Docker build overrides this via -DBUILD_SHARED_LIBS=OFF in the toolchain.
 option(BUILD_SHARED_LIBS "Build shared libraries (required for LGPL desktop builds)" ON)
 option(ZAPAROO_BUILD_TESTS "Build unit/smoke tests" ON)
+option(ZAPAROO_DEV "Development mode: windowed window and dev core endpoint" OFF)
+
+if(ZAPAROO_DEV)
+    add_compile_definitions(ZAPAROO_DEV_BUILD)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(ZaparooCompileOptions)
@@ -27,7 +32,7 @@ include(ZaparooQmlModule)
 # Always emit compile_commands.json so clangd and clang-tidy work without extra flags.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Quick QuickControls2 Qml)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Quick QuickControls2 Qml WebSockets)
 
 if(ZAPAROO_BUILD_TESTS)
     find_package(Qt6 6.7 REQUIRED COMPONENTS QuickTest Test)

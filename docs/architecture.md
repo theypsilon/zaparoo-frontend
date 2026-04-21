@@ -56,16 +56,18 @@ users may replace the bundled Qt libraries. The MiSTer ARM32 binary is
 statically linked; object files are available on request per LGPL §4(d)(1).
 License texts live in `src/LICENSES/`.
 
-## Future C++ → QML data flow
+## C++ → QML data flow
 
-When `ZaparooClient` gains a transport implementation, the data flow
-will be:
+`ZaparooClient` has a working JSON-RPC 2.0 WebSocket transport. The planned
+data flow is:
 
 ```
-ZaparooClient (signals) → QML context property or model
-                        ↓
-                  Carousel.qml (displays games)
+ZaparooClient (signals/callbacks) → QAbstractListModel subclass
+                                   ↓
+                             Carousel.qml (displays games)
 ```
 
-`src/core/` classes are all `QObject` subclasses so they can be exposed to
-QML via `setContextProperty` or `QML_ELEMENT` registration.
+`setContextProperty` is intentionally deferred until a QML-friendly API
+exists (Q_INVOKABLE methods or a model). `src/core/` classes are `QObject`
+subclasses so they can be exposed via `setContextProperty` or
+`QML_ELEMENT` registration when ready.

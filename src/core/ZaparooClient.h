@@ -2,16 +2,35 @@
 // SPDX-FileCopyrightText: 2026 Callan Barrett
 #pragma once
 
+#include "MediaTypes.h"
+
+#include <QAbstractSocket>
+#include <QHash>
+#include <QJsonValue>
 #include <QObject>
 #include <QString>
 #include <QUrl>
+#include <QWebSocket>
+#include <functional>
 
 namespace zaparoo
 {
 
-// Asynchronous interface to Zaparoo Core.
-// Connect to signals to receive events; call connect() to start the session.
-// Stub — transport not yet implemented.
+struct JsonRpcError
+{
+    bool isError{false};
+    int code{0};
+    QString message;
+};
+
+using MediaSearchCallback = std::function<void(const MediaSearchResult&, const JsonRpcError&)>;
+using MediaBrowseCallback = std::function<void(const MediaBrowseResult&, const JsonRpcError&)>;
+
+// Asynchronous client for the Zaparoo Core JSON-RPC 2.0 WebSocket API.
+// Call connectToCore() to open the connection; use mediaSearch()/mediaBrowse()
+// to issue requests. Results arrive via callbacks on the Qt event loop thread.
+// The scanReceived() signal fires for every tokens.added notification pushed
+// by the server (NFC/barcode scans).
 class ZaparooClient : public QObject
 {
     Q_OBJECT
@@ -25,16 +44,33 @@ class ZaparooClient : public QObject
 
     [[nodiscard]] bool isConnected() const;
 
+    QString mediaSearch(const MediaSearchParams& params, MediaSearchCallback callback);
+    QString mediaBrowse(const MediaBrowseParams& params, MediaBrowseCallback callback);
+
   signals:
     void connected();
     void disconnected();
     void errorOccurred(const QString& message);
-
-    // Emitted when Zaparoo Core reports a card/tag scan event.
     void scanReceived(const QString& uid, const QString& text);
 
   private:
-    bool m_connected{false};
+    struct PendingRequest
+    {
+        std::function<void(const QJsonValue&, const JsonRpcError&)> callback;
+    };
+
+    void onConnected();
+    void onDisconnected();
+    void onError(QAbstractSocket::SocketError error);
+    void onTextMessageReceived(const QString& message);
+
+    QString sendRequest(const QString& method, const QJsonObject& params,
+                        std::function<void(const QJsonValue&, const JsonRpcError&)> callback);
+
+    void dispatchNotification(const QString& method, const QJsonObject& params);
+
+    QWebSocket m_socket;
+    QHash<QString, PendingRequest> m_pending;
 };
 
 } // namespace zaparoo

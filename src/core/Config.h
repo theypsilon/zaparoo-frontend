@@ -12,8 +12,12 @@ namespace zaparoo
 // Stub — implementation pending.
 struct Config
 {
-    // Base URL for the local Zaparoo Core HTTP/WebSocket endpoint.
-    QUrl coreEndpoint{"ws://localhost:7497"};
+    // Base URL for the Zaparoo Core WebSocket endpoint (version-pinned path).
+#ifdef ZAPAROO_DEV_BUILD
+    QUrl coreEndpoint{"ws://10.0.0.107:7497/api/v0.1"};
+#else
+    QUrl coreEndpoint{"ws://127.0.0.1:7497/api/v0.1"};
+#endif
 };
 
 // Loads config from the platform-specific config file.

@@ -10,6 +10,7 @@ target_sources(
         Config.h
         Logger.cpp
         Logger.h
+        MediaTypes.h
         PlatformPaths.cpp
         PlatformPaths.h
         ZaparooClient.cpp
@@ -20,6 +21,9 @@ target_include_directories(zaparoo_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(
     zaparoo_core
-    PUBLIC Qt6::Core
-    PRIVATE Zaparoo::CompileOptions
+    PUBLIC
+        Qt6::Core
+        Qt6::WebSockets
+    PRIVATE
+        Zaparoo::CompileOptions
 )

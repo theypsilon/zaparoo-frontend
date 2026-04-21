@@ -10,10 +10,12 @@ import Zaparoo.Theme
 ApplicationWindow {
     id: root
 
+    property bool fullScreen: false
+
     width: Screen.width
     height: Screen.height
     visible: true
-    visibility: Window.FullScreen
+    visibility: fullScreen ? Window.FullScreen : Window.Windowed
     title: "Zaparoo Launcher"
 
     // Keep Sizing singleton informed of the current resolution.

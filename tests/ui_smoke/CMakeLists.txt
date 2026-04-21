@@ -32,5 +32,5 @@ target_link_libraries(
         Qt6::Quick
 )
 
-add_test(NAME ui_smoke COMMAND tst_ui_smoke -input "${CMAKE_CURRENT_SOURCE_DIR}")
+add_test(NAME ui_smoke COMMAND tst_ui_smoke -input "${CMAKE_CURRENT_SOURCE_DIR}" -platform offscreen)
 set_tests_properties(ui_smoke PROPERTIES TIMEOUT 30)

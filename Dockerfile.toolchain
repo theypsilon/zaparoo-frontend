@@ -80,7 +80,8 @@ WORKDIR /build
 ARG QT_VERSION
 RUN git clone --depth 1 --branch v${QT_VERSION} https://github.com/qt/qtbase.git && \
     git clone --depth 1 --branch v${QT_VERSION} https://github.com/qt/qtshadertools.git && \
-    git clone --depth 1 --branch v${QT_VERSION} https://github.com/qt/qtdeclarative.git
+    git clone --depth 1 --branch v${QT_VERSION} https://github.com/qt/qtdeclarative.git && \
+    git clone --depth 1 --branch v${QT_VERSION} https://github.com/qt/qtwebsockets.git
 
 # Stage 1: Qt6 host build (provides native tools: moc, rcc, qmllint, etc.)
 RUN mkdir qtbase-host-build && cd qtbase-host-build && \
@@ -111,6 +112,11 @@ RUN mkdir qtshadertools-host-build && cd qtshadertools-host-build && \
 
 RUN mkdir qtdeclarative-host-build && cd qtdeclarative-host-build && \
     /opt/qt6-host/bin/qt-configure-module ../qtdeclarative \
+    && cmake --build . --parallel $(nproc) \
+    && cmake --install .
+
+RUN mkdir qtwebsockets-host-build && cd qtwebsockets-host-build && \
+    /opt/qt6-host/bin/qt-configure-module ../qtwebsockets \
     && cmake --build . --parallel $(nproc) \
     && cmake --install .
 
@@ -174,5 +180,10 @@ RUN mkdir qtshadertools-arm-build && cd qtshadertools-arm-build && \
 
 RUN mkdir qtdeclarative-arm-build && cd qtdeclarative-arm-build && \
     /opt/qt6-arm32/bin/qt-configure-module ../qtdeclarative \
+    && cmake --build . --parallel $(nproc) \
+    && cmake --install .
+
+RUN mkdir qtwebsockets-arm-build && cd qtwebsockets-arm-build && \
+    /opt/qt6-arm32/bin/qt-configure-module ../qtwebsockets \
     && cmake --build . --parallel $(nproc) \
     && cmake --install .

@@ -34,6 +34,9 @@ else()
         -Wunused
         # Suppress warnings from Qt-generated MOC code
         -Wno-redundant-decls
+        # Qt's qCDebug/qCWarning macros use empty __VA_ARGS__ which is a
+        # C++20 extension; suppress the pedantic diagnostic it triggers.
+        -Wno-gnu-zero-variadic-macro-arguments
     )
 endif()
 
