@@ -49,9 +49,13 @@ find_program(RUN_CLANG_TIDY_EXE NAMES run-clang-tidy run-clang-tidy.py)
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 
 if(RUN_CLANG_TIDY_EXE)
+    # Pass first-party sources as positional args rather than `-source-filter`
+    # so we work with the older run-clang-tidy shipped in Ubuntu (noble has
+    # clang-tidy 18 but its run-clang-tidy rejects `-source-filter`, which
+    # only stabilized across distros in clang 19+).
     add_custom_target(
         tidy
-        COMMAND ${RUN_CLANG_TIDY_EXE} -p "${CMAKE_BINARY_DIR}" -source-filter "${CMAKE_SOURCE_DIR}/src/.*"
+        COMMAND ${RUN_CLANG_TIDY_EXE} -p "${CMAKE_BINARY_DIR}" ${_ZAPAROO_CXX_SOURCES}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "clang-tidy: static analysis (parallel via run-clang-tidy)"
         VERBATIM
