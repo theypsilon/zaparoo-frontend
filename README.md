@@ -24,6 +24,10 @@ them once with:
 cargo install --locked cargo-nextest cargo-deny
 ```
 
+## Trademarks
+
+This repository contains Zaparoo trademarks which are explicitly licensed to the project in this location by the trademark owner. These trademarks must be removed from the project or replaced if you intend to redistribute or adapt the project in any form. See the Zaparoo [Terms of Use](https://zaparoo.org/terms/) for further details.
+
 ## License
 
 Copyright 2026 The Zaparoo Project Contributors.
