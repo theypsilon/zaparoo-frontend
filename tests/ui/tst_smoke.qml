@@ -5,6 +5,7 @@
 import QtQuick
 import QtTest
 import Zaparoo.App
+import Zaparoo.Browse as Browse
 
 TestCase {
     name: "UiWindow"
@@ -23,5 +24,12 @@ TestCase {
 
     function test_initial_state() {
         compare(mainWindow.activeScreen, "hub")
+    }
+
+    function test_system_status_properties_exist() {
+        compare(typeof Browse.SystemStatus.has_nfc, "boolean")
+        compare(typeof Browse.SystemStatus.has_wifi_internet, "boolean")
+        compare(typeof Browse.SystemStatus.has_lan_internet, "boolean")
+        compare(typeof Browse.SystemStatus.has_bluetooth, "boolean")
     }
 }

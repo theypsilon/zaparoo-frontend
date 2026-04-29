@@ -13,6 +13,7 @@ qt_add_qml_module(
         Modal.qml
         PagedGrid.qml
         ScreenStateOverlay.qml
+        StatusIcon.qml
         Tile.qml
         TileLoader.qml
 )
