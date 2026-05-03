@@ -22,6 +22,20 @@ Item {
 
     property alias gamesGrid: gamesGrid
 
+    // Router-driven flag: `MainLayout.qml` writes this to
+    // `root.pendingTransition !== ""` for every peer screen, including
+    // this one. The screen body hides while it's true so the global
+    // "Loading…" cue paints alone on a cleared band rather than over
+    // a populated grid.
+    property bool transitioning: false
+
+    // Cover-gate flag: true while `GamesModel` is holding `loading`
+    // for the initial-page paint. Pagination uses a separate
+    // `loading_more` flag, so PgDn doesn't trip this. The body hides
+    // on either flag (see `visible:` bindings below) so the centred
+    // `ScreenStateOverlay` paints alone in both cases.
+    readonly property bool coverGateLoading: Browse.GamesModel.loading
+
     // Emitted when the user presses Escape — Main.qml flips the
     // active screen back to SystemsScreen (one peer up the back-stack;
     // a second Escape from there pops to Hub).
@@ -175,6 +189,7 @@ Item {
     // entry count for the path.
     TopStatusStrip {
         id: topStrip
+        visible: !games.transitioning && !games.coverGateLoading
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
@@ -203,6 +218,7 @@ Item {
     PagedGrid {
         id: gamesGrid
 
+        visible: !games.transitioning && !games.coverGateLoading
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: topStrip.bottom
@@ -235,6 +251,7 @@ Item {
     // tile selection).
     ActiveLabel {
         id: activeLabel
+        visible: !games.transitioning && !games.coverGateLoading
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: gamesGrid.bottom
