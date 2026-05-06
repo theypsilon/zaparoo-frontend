@@ -28,6 +28,12 @@ Item {
     // "Loading…" cue paints alone on a cleared band rather than over
     // a populated grid.
     property bool transitioning: false
+    readonly property bool _listLayout: Browse.Settings.current_browse_layout === "list"
+    readonly property real _listBandScale: 0.85
+    readonly property int _listPageSize: 10
+    readonly property int _browsePageSize:
+        games._listLayout ? games._listPageSize : gamesGrid.pageSize
+    property bool _currentMoveIsRepeat: false
 
     // Cover-gate flag: true while `GamesModel` is holding `loading`
     // for the initial-page paint. Pagination uses a separate
@@ -35,6 +41,13 @@ Item {
     // on either flag (see `visible:` bindings below) so the centred
     // `ScreenStateOverlay` paints alone in both cases.
     readonly property bool coverGateLoading: Browse.GamesModel.loading
+
+    on_ListLayoutChanged: {
+        if (games._listLayout) {
+            games._fillListPage()
+            games._scheduleMetadataLoad(false)
+        }
+    }
 
     // Emitted when the user presses Escape — Main.qml flips the
     // active screen back to SystemsScreen (one peer up the back-stack;
@@ -99,10 +112,85 @@ Item {
     // success. Unlike HubScreen's _handleSystems, none of the games-grid
     // directions have a row-edge escape branch, so all four cardinal
     // actions share this exact body.
-    function _performMove(dx: int, dy: int): void {
+    function _performMove(dx: int, dy: int, isRepeat): void {
+        if (games._listLayout) {
+            if (dy !== 0)
+                games._performLinearMove(dy, isRepeat === true)
+            return
+        }
         if (games.gamesGrid.moveSelection(dx, dy))
             games._scheduleSelectedPersist(
                 Browse.GamesModel.path_at(games.gamesGrid.currentIndex))
+    }
+
+    function _performLinearMove(delta: int, isRepeat: bool): void {
+        const count = games.gamesGrid.itemCount
+        if (count <= 0)
+            return
+        let next = games.gamesGrid.currentIndex + delta
+        if (next < 0)
+            next = count - 1
+        else if (next >= count) {
+            const knownTotal = Browse.GamesModel.dir_count
+                               + Browse.GamesModel.total_files
+            if (games._listHasMore(count, knownTotal)) {
+                Browse.GamesModel.fetch_more()
+                return
+            }
+            next = 0
+        }
+        if (next === games.gamesGrid.currentIndex) {
+            if (next >= count - 2)
+                Browse.GamesModel.fetch_more()
+            return
+        }
+        games._currentMoveIsRepeat = isRepeat
+        games.gamesGrid.currentIndex = next
+        games._currentMoveIsRepeat = false
+        Browse.GamesState.set_selected_at_top(
+            Browse.GamesModel.path_at(games.gamesGrid.currentIndex))
+        if (next >= count - 2
+            && Browse.GamesModel.has_next_page)
+            Browse.GamesModel.fetch_more()
+        games._prefetchListTail(next)
+    }
+
+    function _scheduleMetadataLoad(isRepeat): void {
+        if (!games._listLayout)
+            return
+        if (isRepeat === true)
+            Browse.GamesModel.clear_current_detail()
+        metadataLoadDebounce.restart()
+    }
+
+    function _loadSelectedMetadata(): void {
+        if (!games._listLayout || games.gamesGrid.itemCount <= 0)
+            return
+        Browse.GamesModel.load_description_at(gamesGrid.currentIndex)
+    }
+
+    function _fillListPage(): void {
+        if (!games._listLayout)
+            return
+        const count = games.gamesGrid.itemCount
+        if (count > 0 && count <= games._listPageSize
+            && Browse.GamesModel.has_next_page)
+            Browse.GamesModel.fetch_more()
+    }
+
+    function _listHasMore(count: int, knownTotal: int): bool {
+        return Browse.GamesModel.has_next_page || knownTotal > count
+    }
+
+    function _prefetchListTail(index: int): void {
+        if (!games._listLayout || Browse.GamesModel.loading_more)
+            return
+        const count = games.gamesGrid.itemCount
+        const knownTotal = Browse.GamesModel.dir_count
+                           + Browse.GamesModel.total_files
+        if (index >= count - games._listPageSize
+            && games._listHasMore(count, knownTotal))
+            Browse.GamesModel.fetch_more()
     }
 
     // Page jump (L/R shoulder buttons). Wraps in both directions; same
@@ -117,7 +205,11 @@ Item {
     function _focusIndex(index: int): void {
         if (index < 0 || index >= games.gamesGrid.itemCount)
             return
+        games._currentMoveIsRepeat = false
         games.gamesGrid.currentIndex = index
+        games._currentMoveIsRepeat = false
+        Browse.GamesState.set_selected_at_top(
+            Browse.GamesModel.path_at(games.gamesGrid.currentIndex))
         games._scheduleSelectedPersist(
             Browse.GamesModel.path_at(games.gamesGrid.currentIndex))
     }
@@ -140,15 +232,26 @@ Item {
         return Browse.GamesState.path_stack.length > 1
     }
 
-    function handleAction(action: string): void {
+    function handleAction(action: string, isRepeat): void {
+        if (games._listLayout && isRepeat === true
+            && (action === "up" || action === "down")) {
+            Browse.GamesModel.clear_current_detail()
+            metadataLoadDebounce.restart()
+        }
         if (action === "left") {
-            games._performMove(-1, 0)
+            if (games._listLayout)
+                Browse.GamesModel.cycle_detail_image(-1)
+            else
+                games._performMove(-1, 0, isRepeat)
         } else if (action === "right") {
-            games._performMove(1, 0)
+            if (games._listLayout)
+                Browse.GamesModel.cycle_detail_image(1)
+            else
+                games._performMove(1, 0, isRepeat)
         } else if (action === "up") {
-            games._performMove(0, -1)
+            games._performMove(0, -1, isRepeat)
         } else if (action === "down") {
-            games._performMove(0, 1)
+            games._performMove(0, 1, isRepeat)
         } else if (action === "page_prev") {
             // L shoulder. Ignored on non-Ready states — there's no
             // data to page through.
@@ -217,7 +320,9 @@ Item {
                 games._scheduleSelectedPersist(
                     Browse.GamesModel.path_at(idx))
                 games.flushSelectedPersist()
-                const rect = games.gamesGrid.currentCellRectIn(games)
+                const rect = games._listLayout
+                             ? gamesList.currentCellRectIn(games)
+                             : games.gamesGrid.currentCellRectIn(games)
                 games.requestContextMenu(idx, rect)
             }
         } else if (action === "cancel") {
@@ -230,6 +335,13 @@ Item {
     }
 
     // ── Visual tree ───────────────────────────────────────────────────────────
+
+    Timer {
+        id: metadataLoadDebounce
+        interval: 220
+        repeat: false
+        onTriggered: games._loadSelectedMetadata()
+    }
 
     // Top status strip — page counter (left), system title (center),
     // total-files badge (right). System title is composed via
@@ -259,13 +371,102 @@ Item {
             const idx = Browse.SystemsModel.index_for_system_id(sid)
             return idx >= 0 ? Browse.SystemsModel.system_name_at(idx) : sid
         }
-        currentPage: gamesGrid.currentPage
+        currentPage: Math.floor(gamesGrid.currentIndex / games._browsePageSize)
         totalPages: Math.max(1,
             Math.ceil((Browse.GamesModel.dir_count
-                       + Browse.GamesModel.total_files) / gamesGrid.pageSize))
+                       + Browse.GamesModel.total_files) / games._browsePageSize))
         totalText: Browse.GamesModel.total_files > 0
                    ? qsTr("%1 files").arg(Browse.GamesModel.total_files)
                    : ""
+    }
+
+    Item {
+        id: listBand
+
+        visible: !games.transitioning && !games.coverGateLoading && games._listLayout
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: topStrip.bottom
+        anchors.topMargin: Sizing.pctH(2)
+        height: Math.round(Math.max(0,
+            games.height - (topStrip.y + topStrip.height + Sizing.pctH(2))
+            - Sizing.pctH(8)) * games._listBandScale)
+    }
+
+    BrowseList {
+        id: gamesList
+
+        visible: !games.transitioning && !games.coverGateLoading && games._listLayout
+        anchors.left: listBand.left
+        anchors.leftMargin: Sizing.pctW(5)
+        anchors.top: listBand.top
+        anchors.bottom: listBand.bottom
+        width: Sizing.pctW(45)
+        model: Browse.GamesModel
+        totalItemsOverride: Browse.GamesModel.dir_count
+                            + Browse.GamesModel.total_files
+        targetVisibleRowCount: games._listPageSize
+        showFileStem: true
+        currentIndex: gamesGrid.currentIndex
+        onItemHovered: (index) => games._focusIndex(index)
+        onItemClicked: (index) => {
+            games._focusIndex(index)
+            games.handleAction("accept")
+        }
+        onItemRightClicked: (index) => {
+            games._focusIndex(index)
+            games.handleAction("write_card")
+        }
+        onEmptyRightClicked: games.handleAction("cancel")
+        onPageWheelRequested: (delta) => games.handleAction(
+            delta > 0 ? "page_next" : "page_prev")
+    }
+
+    BrowseDetailPane {
+        visible: !games.transitioning && !games.coverGateLoading && games._listLayout
+        anchors.left: gamesList.right
+        anchors.leftMargin: Sizing.pctW(5)
+        anchors.right: parent.right
+        anchors.rightMargin: Sizing.pctW(5)
+        anchors.top: listBand.top
+        anchors.bottom: listBand.bottom
+        title: gamesList.currentName
+        coverKey: Browse.GamesModel.current_detail_image_key !== ""
+                  ? Browse.GamesModel.current_detail_image_key
+                  : gamesList.currentCoverKey
+        description: Browse.GamesModel.current_description
+        showDescription: false
+        showTitle: false
+        detailTags: Browse.GamesModel.current_detail_tags
+        canPreviousImage: Browse.GamesModel.current_detail_image_can_prev
+        canNextImage: Browse.GamesModel.current_detail_image_can_next
+        onVisibleChanged: {
+            if (visible)
+                Browse.GamesModel.load_description_at(gamesGrid.currentIndex)
+        }
+    }
+
+    Text {
+        id: listDescription
+
+        visible: listBand.visible && text !== ""
+        anchors.left: parent.left
+        anchors.leftMargin: Sizing.pctW(5)
+        anchors.right: parent.right
+        anchors.rightMargin: Sizing.pctW(5)
+        anchors.top: listBand.bottom
+        anchors.topMargin: Sizing.pctH(2)
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Sizing.pctH(8)
+        text: Browse.GamesModel.current_description
+        color: Theme.textLabel
+        font.family: Theme.fontUi
+        font.pixelSize: Sizing.fontSize(2.1)
+        wrapMode: Text.Wrap
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignLeft
+        verticalAlignment: Text.AlignTop
+        renderType: Text.NativeRendering
     }
 
     // Grid fills the safe zone between the top strip and the active
@@ -275,12 +476,12 @@ Item {
     PagedGrid {
         id: gamesGrid
 
-        visible: !games.transitioning && !games.coverGateLoading
+        visible: !games.transitioning && !games.coverGateLoading && !games._listLayout
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: topStrip.bottom
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Sizing.pctH(15)
+        anchors.bottomMargin: Sizing.pctH(8)
         model: Browse.GamesModel
         delegate: Tile { showCaption: true }
         // Cover-art tiles run taller than systems logos, so a 5x3
@@ -302,6 +503,10 @@ Item {
         // on the loaded last item rather than spinning forever.
         hasMorePages: Browse.GamesModel.has_next_page
         onLoadMoreRequested: Browse.GamesModel.fetch_more()
+        onCurrentIndexChanged: {
+            if (games._listLayout)
+                games._scheduleMetadataLoad(games._currentMoveIsRepeat)
+        }
         onItemHovered: (index) => games._focusIndex(index)
         onItemClicked: (index) => {
             games._focusIndex(index)
@@ -322,7 +527,7 @@ Item {
     // tile selection).
     ActiveLabel {
         id: activeLabel
-        visible: !games.transitioning && !games.coverGateLoading
+        visible: false
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: gamesGrid.bottom
@@ -333,9 +538,9 @@ Item {
     }
 
     ScreenStateOverlay {
-        anchors.centerIn: gamesGrid
-        width: gamesGrid.width
-        height: gamesGrid.height
+        anchors.centerIn: games._listLayout ? gamesList : gamesGrid
+        width: games._listLayout ? gamesList.width : gamesGrid.width
+        height: games._listLayout ? gamesList.height : gamesGrid.height
         loading: Browse.GamesModel.loading
         errorMessage: Browse.GamesModel.error_message ?? ""
         count: Browse.GamesModel.count
