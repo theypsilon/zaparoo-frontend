@@ -14,7 +14,10 @@ import Zaparoo.Theme
 
 // Software-rendering safe contextual menu. It positions itself next to an
 // anchor rectangle and clamps to the window bounds so edge tiles never push
-// the menu off-screen. It intentionally has no dim scrim.
+// the menu off-screen. The scrim is drawn as four bands around `anchorRect`
+// so the anchored tile stays bright while the rest of the screen dims —
+// a full-screen scrim would defeat the "this menu is about *that* tile"
+// affordance.
 Item {
     id: menu
 
@@ -33,13 +36,14 @@ Item {
     readonly property int margin: Sizing.pctH(2)
     readonly property int gap: Sizing.pctW(1.2)
     readonly property int rowHeight: Sizing.pctH(6)
+    readonly property int rowSpacing: Sizing.pctH(1)
     readonly property int horizontalPadding: Sizing.pctW(2)
     readonly property int panelWidth: Math.min(Math.max(Sizing.pctW(26), Sizing.pctH(44)), Math.max(0, width - 2 * margin))
     // Top/bottom margins inside the panel are sized to the panel
-    // radius so a focused row's square background never intersects
-    // the rounded corners — see the panel `Rectangle` below.
+    // radius so a focused row's accent ring never intersects the
+    // rounded corners — see the panel `Rectangle` below.
     readonly property int panelRadius: Sizing.half(Sizing.cornerRadius)
-    readonly property int panelHeight: Math.min(entries.length * rowHeight + 2 * panelRadius, Math.max(0, height - 2 * margin))
+    readonly property int panelHeight: Math.min(entries.length * rowHeight + Math.max(0, entries.length - 1) * rowSpacing + 2 * panelRadius, Math.max(0, height - 2 * margin))
     readonly property bool preferRight: anchorRect.x + anchorRect.width + gap + panelWidth <= width - margin
     readonly property int preferredX: preferRight ? Sizing.px(anchorRect.x + anchorRect.width + gap) : Sizing.px(anchorRect.x - gap - panelWidth)
     readonly property int preferredY: Sizing.px(anchorRect.y + Sizing.center(anchorRect.height, panelHeight))
@@ -72,10 +76,65 @@ Item {
             menu.closeRequested();
     }
 
+    // Catches dismiss-clicks on the dimmed area around the anchor.
+    // Sits beneath the four scrim bands and the panel; per-row
+    // MouseAreas inside the panel win for clicks on rows because the
+    // panel is declared after this MouseArea, so the panel subtree
+    // sits on top in z-order. Clicks on the anchor area also hit this
+    // MouseArea (the bands don't cover the anchor) and close the menu.
+    // Clicks inside the panel chrome (top/bottom radius padding, side
+    // margins, row spacing) are filtered out by the bounding-rect
+    // check so a stray press on padding doesn't dismiss.
+    //
+    // Swallows hover and every mouse button so neither hover events
+    // nor right-clicks bleed through to the underlying grid while the
+    // menu is open. Without `hoverEnabled` and `Qt.AllButtons` the
+    // grid below would highlight tiles under the scrim and a right
+    // click on the dim area would land on the grid's context handler.
     MouseArea {
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton
-        onClicked: menu.closeRequested()
+        hoverEnabled: true
+        acceptedButtons: Qt.AllButtons
+        onClicked: (mouse) => {
+            if (mouse.x < panel.x || mouse.y < panel.y
+                || mouse.x > panel.x + panel.width
+                || mouse.y > panel.y + panel.height)
+                menu.closeRequested()
+        }
+    }
+
+    // Four scrim bands framing `anchorRect`. The anchor area itself is
+    // intentionally not painted so the tile the menu is *about* stays
+    // bright. `Math.max(0, ...)` clamps every dimension so an anchor
+    // flush against an edge collapses the matching band rather than
+    // overflowing into negative territory.
+    Rectangle {
+        x: 0
+        y: 0
+        width: menu.width
+        height: Sizing.px(Math.max(0, menu.anchorRect.y))
+        color: Theme.scrim
+    }
+    Rectangle {
+        x: 0
+        y: Sizing.px(menu.anchorRect.y + menu.anchorRect.height)
+        width: menu.width
+        height: Sizing.px(Math.max(0, menu.height - (menu.anchorRect.y + menu.anchorRect.height)))
+        color: Theme.scrim
+    }
+    Rectangle {
+        x: 0
+        y: Sizing.px(menu.anchorRect.y)
+        width: Sizing.px(Math.max(0, menu.anchorRect.x))
+        height: Sizing.px(Math.max(0, menu.anchorRect.height))
+        color: Theme.scrim
+    }
+    Rectangle {
+        x: Sizing.px(menu.anchorRect.x + menu.anchorRect.width)
+        y: Sizing.px(menu.anchorRect.y)
+        width: Sizing.px(Math.max(0, menu.width - (menu.anchorRect.x + menu.anchorRect.width)))
+        height: Sizing.px(Math.max(0, menu.anchorRect.height))
+        color: Theme.scrim
     }
 
     Rectangle {
@@ -86,16 +145,15 @@ Item {
         width: menu.panelWidth
         height: menu.panelHeight
         color: Theme.bgPanel
-        border.width: Sizing.stroke(2)
-        border.color: Theme.textPrimary
         radius: menu.panelRadius
 
         Column {
             anchors.fill: parent
             anchors.topMargin: menu.panelRadius
             anchors.bottomMargin: menu.panelRadius
-            anchors.leftMargin: 1
-            anchors.rightMargin: 1
+            anchors.leftMargin: Sizing.pctW(1)
+            anchors.rightMargin: Sizing.pctW(1)
+            spacing: menu.rowSpacing
 
             Repeater {
                 model: menu.entries
@@ -108,9 +166,10 @@ Item {
 
                     width: parent.width
                     height: menu.rowHeight
-                    color: index === menu.currentIndex ? Theme.surfaceCard : "transparent"
-                    border.width: index === menu.currentIndex ? Sizing.stroke(1) : 0
-                    border.color: Theme.accent
+                    color: Theme.surfaceCard
+                    border.width: index === menu.currentIndex ? Sizing.stroke(2) : Sizing.stroke(1)
+                    border.color: index === menu.currentIndex ? Theme.accent : Theme.borderMid
+                    radius: Sizing.cornerRadius
 
                     Text {
                         anchors.left: parent.left
@@ -119,7 +178,7 @@ Item {
                         anchors.leftMargin: menu.horizontalPadding
                         anchors.rightMargin: menu.horizontalPadding
                         text: row.modelData.label
-                        color: row.index === menu.currentIndex ? Theme.textPrimary : Theme.textLabel
+                        color: Theme.textPrimary
                         font.family: Theme.fontUi
                         font.pixelSize: Sizing.fontSize(2.4)
                         elide: Text.ElideRight

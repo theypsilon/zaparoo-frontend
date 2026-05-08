@@ -20,7 +20,7 @@ use crate::media_types::{
     MediaMetaParams, MediaMetaResult, MediaResult, MediaScrapeParams, MediaSearchParams,
     MediaSearchResult, MediaTagsParams, MediaTagsResult, MediaTagsUpdateParams,
     MediaTagsUpdateResult, ReadersResult, ReadersWriteParams, RunParams, ScrapersResult,
-    SystemsParams, SystemsResult, VersionResult,
+    ScrapingStatusResponse, SystemsParams, SystemsResult, VersionResult,
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async_with_config,
+    tungstenite::{protocol::WebSocketConfig, Message},
+};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -324,7 +327,19 @@ impl Client {
                     connection_clone.send_replace(next);
                 }
 
-                match connect_async(&endpoint).await {
+                // tungstenite's default 16 MiB frame / 64 MiB message
+                // caps exist to "prevent memory eating by a malicious
+                // user". The launcher connects to exactly one trusted
+                // Core on the LAN, so that threat model doesn't apply —
+                // and a legitimate bulk `media.image` response can
+                // exceed 16 MiB, which kills the session and cascades
+                // every in-flight watcher into "disconnected". Disable
+                // both incoming caps; outbound traffic is small JSON
+                // requests that never approach the limits.
+                let ws_config = WebSocketConfig::default()
+                    .max_message_size(None)
+                    .max_frame_size(None);
+                match connect_async_with_config(&endpoint, Some(ws_config), false).await {
                     Ok((ws_stream, _)) => {
                         info!("connected to core at {endpoint}");
 
@@ -674,6 +689,19 @@ impl Client {
         struct P {}
         self.call("media.scrape.cancel", &P {}).await?;
         Ok(())
+    }
+
+    /// One-shot scraper status. Mirrors the TUI's `getScrapeStatus` —
+    /// the `media.scraping` notification stream only fires while a scrape
+    /// is running, so a fresh launcher seeing an idle Core has no other
+    /// way to learn the cumulative `total_scraped`.
+    pub async fn media_scrape_status(&self) -> Result<ScrapingStatusResponse, ClientError> {
+        #[derive(Serialize)]
+        struct P {}
+        let val = self.call("media.scrape.status", &P {}).await?;
+        serde_json::from_value(val).map_err(|e| ClientError {
+            message: e.to_string(),
+        })
     }
 
     /// Lists the scrapers Core knows how to run. Used to resolve a

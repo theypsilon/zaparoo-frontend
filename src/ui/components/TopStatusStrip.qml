@@ -43,7 +43,7 @@ Item {
         horizontalAlignment: Text.AlignLeft
         text: status.totalText
         font.family: Theme.fontUi
-        font.pixelSize: Sizing.fontSize(3)
+        font.pixelSize: Sizing.fontSize(2.9)
         color: Theme.textPrimary
         renderType: Text.NativeRendering
     }
@@ -76,7 +76,7 @@ Item {
         horizontalAlignment: Text.AlignRight
         text: qsTr("Page %1 / %2").arg(status.currentPage + 1).arg(status.totalPages)
         font.family: Theme.fontUi
-        font.pixelSize: Sizing.fontSize(3)
+        font.pixelSize: Sizing.fontSize(2.9)
         color: Theme.textPrimary
         renderType: Text.NativeRendering
     }

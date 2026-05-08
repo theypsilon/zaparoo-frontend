@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Wizzo Pty Ltd and the Zaparoo Project contributors.
 // SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 // Unified grid tile. Solid card with a centered icon area filling the
-// card body, plus a white outline ring around the card when this tile
-// is the focused selection. Used by every tile surface in the launcher
+// card body, plus an accent-coloured outline ring around the card when
+// this tile is the focused selection. Used by every tile surface in the launcher
 // — hub categories row, systems grid, games grid, recents grid — so
 // the vocabulary is identical across screens.
 // Two layout modes, gated by `showCaption`:
@@ -46,7 +46,6 @@ Item {
     // `layer.enabled` is documented for scene graph (GPU) rendering;
     // on the MiSTer software target it is a regression, not an
     // optimization.
-    // qmllint enable missing-property compiler
     // qmllint enable missing-property compiler
     // No focus scale bump. The earlier 1.06 scale on the focused tile
     // forced a bilinear resample of the cover pixmap on every focus
@@ -95,7 +94,15 @@ Item {
     // extension — `systems/snes`, `categories/Consoles`, etc. The model
     // chooses the subdirectory; Tile is agnostic. Resources.coverUrl is
     // the single source of truth for the qrc layout — see Resources.qml.
-    readonly property url _coverSource: Resources.coverUrl(root.delegateCoverKey)
+    //
+    // The model's `icons/Loading` sentinel is a special case: it means
+    // "cover fetch is in flight". Routing it through the full-bleed
+    // cover slot would rasterise the SVG at the entire icon area; the
+    // existing `loadingGlyph` overlay below already defines the
+    // standard centred hourglass size, so swallow the source here and
+    // let `loadingGlyph` own the painting.
+    readonly property bool _coverPending: root.delegateCoverKey === "icons/Loading"
+    readonly property url _coverSource: root._coverPending ? "" : Resources.coverUrl(root.delegateCoverKey)
     readonly property bool _hasCover: cover.status === Image.Ready
 
     anchors.fill: parent
@@ -112,10 +119,16 @@ Item {
     // Tile body. Solid card so the white icon has a high-contrast
     // surface. Always visible — no opacity gating — which is the
     // unified-Tile contract: every grid renders the same shape.
+    // Static 1px borderMid edge gives every tile a card edge whether
+    // focused or not — same depth cue settings rows carry. The accent
+    // focus ring still paints on top when this tile is the focused
+    // selection.
     Rectangle {
         anchors.fill: parent
         radius: Sizing.cornerRadius
         color: Theme.surfaceCard
+        border.color: Theme.borderMid
+        border.width: Sizing.stroke(1)
     }
 
     // Focus outline ring. Drawn *inside* the card edge so the ring
@@ -130,7 +143,7 @@ Item {
     // the inset (`_outlineGap = pctH(0.4)`), so the ring never overlaps
     // content.
     // Focus ring drawn as two stacked *filled* rounded rectangles — an
-    // outer white pill and an inner surfaceCard mask that punches the
+    // outer accent pill and an inner surfaceCard mask that punches the
     // centre back, leaving a uniform outline. Equivalent to the older
     // single-Rectangle `border.color` + `border.width` approach but
     // significantly smoother on the corners under Qt's software
@@ -144,7 +157,7 @@ Item {
 
         anchors.fill: parent
         anchors.margins: root._outlineGap
-        color: Theme.textPrimary
+        color: Theme.accent
         radius: Math.max(0, Sizing.cornerRadius - root._outlineGap)
         antialiasing: true
         visible: root._focusedSelection
@@ -224,7 +237,8 @@ Item {
         fillMode: Image.PreserveAspectFit
         smooth: true
         asynchronous: false
-        visible: root.showCaption && cover.status === Image.Loading
+        visible: root.showCaption
+                 && (root._coverPending || cover.status === Image.Loading)
     }
 
     Image {

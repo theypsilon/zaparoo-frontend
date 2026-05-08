@@ -135,7 +135,7 @@ Item {
                 visible: modal.phase === "idle"
                 text: qsTr("Zaparoo needs to scan your games before you can use the launcher. This usually takes a few minutes.")
                 font.family: Theme.fontUi
-                font.pixelSize: Sizing.fontSize(2.5)
+                font.pixelSize: Sizing.fontSize(2.6)
                 color: Theme.textPrimary
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -216,7 +216,7 @@ Item {
                             return qsTr("Preparing…");
                         }
                         font.family: Theme.fontUi
-                        font.pixelSize: Sizing.fontSize(2.3)
+                        font.pixelSize: Sizing.fontSize(2.4)
                         color: Theme.textLabel
                         wrapMode: Text.WordWrap
                         horizontalAlignment: Text.AlignHCenter
@@ -249,9 +249,12 @@ Item {
                     y: Sizing.center(parent.height, height)
                     width: Sizing.pctW(28)
                     height: parent.height
-                    color: Theme.bgBar
-                    border.width: Sizing.stroke(1)
-                    border.color: Theme.borderMid
+                    color: Theme.surfaceCard
+                    // Single button per phase — always the default action,
+                    // so render with the focused recipe (accent border,
+                    // 2px) instead of the unfocused borderMid edge.
+                    border.width: Sizing.stroke(2)
+                    border.color: Theme.accent
                     radius: Sizing.cornerRadius
 
                     Text {
@@ -259,7 +262,7 @@ Item {
                         y: Sizing.center(parent.height, height)
                         text: modal.phase === "running" ? qsTr("Cancel") : qsTr("Start scan")
                         font.family: Theme.fontUi
-                        font.pixelSize: Sizing.fontSize(2.5)
+                        font.pixelSize: Sizing.fontSize(2.6)
                         color: Theme.textPrimary
                         renderType: Text.NativeRendering
                     }

@@ -28,6 +28,12 @@ Item {
     // "Loading…" cue paints alone on a cleared band rather than over
     // a populated grid.
     property bool transitioning: false
+    // Router-driven flag: `MainLayout` writes this to
+    // `!ScreenManager.hasModal` so the focused tile's accent ring
+    // hides while a modal (the context menu) is on top of the stack.
+    // Avoids the two-focus-ring read where the menu's selected entry
+    // and the anchored tile both light up.
+    property bool gridFocused: true
     readonly property bool _listLayout: Browse.Settings.current_browse_layout === "list"
     readonly property real _listBandScale: 0.85
     readonly property int _listPageSize: 10
@@ -432,7 +438,7 @@ Item {
         text: Browse.GamesModel.current_description
         color: Theme.textLabel
         font.family: Theme.fontUi
-        font.pixelSize: Sizing.fontSize(2.1)
+        font.pixelSize: Sizing.fontSize(2.2)
         wrapMode: Text.Wrap
         elide: Text.ElideRight
         horizontalAlignment: Text.AlignLeft
@@ -452,7 +458,8 @@ Item {
         anchors.right: parent.right
         anchors.top: topStrip.bottom
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Sizing.pctH(8)
+        anchors.bottomMargin: Sizing.pctH(15)
+        focused: games.gridFocused
         model: Browse.GamesModel
         delegate: Tile {
             showCaption: true
@@ -479,6 +486,15 @@ Item {
             if (games._listLayout)
                 games._scheduleMetadataLoad(games._currentMoveIsRepeat);
         }
+        // Cover prefetch is driven by what the user is looking at,
+        // not by what metadata page Core happened to send back. Each
+        // page turn re-anchors the queue so the visible page wins
+        // LIFO drain order, with the next page warming behind it.
+        onCurrentPageChanged: {
+            const first = currentPage * pageSize;
+            Browse.GamesModel.visible_first_row = first;
+            Browse.GamesModel.prefetch_around(first);
+        }
         onItemHovered: index => games._focusIndex(index)
         onItemClicked: index => {
             games._focusIndex(index);
@@ -498,7 +514,7 @@ Item {
     // tile selection).
     ActiveLabel {
         id: activeLabel
-        visible: false
+        visible: !games.transitioning && !games.coverGateLoading && !games._listLayout
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: gamesGrid.bottom

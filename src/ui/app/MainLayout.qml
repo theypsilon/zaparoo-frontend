@@ -135,6 +135,7 @@ ApplicationWindow {
     property alias firstRunIndexModal: firstRunIndexModal
     property alias logUploadModal: logUploadModal
     property alias quitConfirmModal: quitConfirmModal
+    property alias listPickerModal: listPickerModal
     // Exposed so Main.qml binds Sizing.screenWidth/Height to the
     // (logical) scene dimensions in CRT preview mode rather than the
     // (physical) ApplicationWindow dimensions. Outside preview the
@@ -149,6 +150,15 @@ ApplicationWindow {
     property bool firstRunIndexModalVisible: false
     property bool logUploadModalVisible: false
     property bool quitConfirmModalVisible: false
+    property bool listPickerModalVisible: false
+    // Round-trip state for the list picker. The router writes these
+    // when opening the modal (Settings emits requestListPicker with
+    // fieldId so the accept handler can dispatch back to the right
+    // Browse.Settings.set_X without re-parsing the title).
+    property string listPickerTitle: ""
+    property var listPickerEntries: []
+    property string listPickerInitialId: ""
+    property string listPickerFieldId: ""
     property bool contextMenuVisible: false
     property rect contextMenuAnchor: Qt.rect(0, 0, 0, 0)
     // Owner-aware. Written by Main.qml at openContextMenu time; each entry
@@ -204,6 +214,8 @@ ApplicationWindow {
     signal closeLogUploadRequested
     signal closeQuitConfirmRequested
     signal quitConfirmAccepted
+    signal listPickerAccepted(string fieldId, string selectedId)
+    signal listPickerCloseRequested(string fieldId)
 
     // Two-way sync between root.activeScreen and ScreenManager.activeScreen.
     // Binding-breaking assignments (tests setting root.activeScreen = "games")
@@ -495,6 +507,23 @@ ApplicationWindow {
             onCancelRequested: root.closeQuitConfirmRequested()
         }
 
+        // List-picker modal. Settings opens this for picker rows
+        // (Language, Browsing layout, Button style, Resolution). The
+        // fieldId round-trip lets the router dispatch the chosen id
+        // back to the matching Browse.Settings.set_X without parsing
+        // the title.
+        ListPickerModal {
+            id: listPickerModal
+
+            anchors.fill: parent
+            open: root.listPickerModalVisible
+            title: root.listPickerTitle
+            entries: root.listPickerEntries
+            initialId: root.listPickerInitialId
+            onAccepted: id => root.listPickerAccepted(root.listPickerFieldId, id)
+            onCloseRequested: root.listPickerCloseRequested(root.listPickerFieldId)
+        }
+
         // ── Instructions bar ──────────────────────────────────────────────────────
 
         Rectangle {
@@ -614,6 +643,21 @@ ApplicationWindow {
                         }
                     ];
                 if (root.quitConfirmModalVisible)
+                    return [
+                        {
+                            button: "Dpad",
+                            label: qsTr("Move")
+                        },
+                        {
+                            button: "ButtonA",
+                            label: qsTr("Select")
+                        },
+                        {
+                            button: "ButtonB",
+                            label: qsTr("Cancel")
+                        }
+                    ];
+                if (root.listPickerModalVisible)
                     return [
                         {
                             button: "Dpad",
@@ -917,7 +961,7 @@ ApplicationWindow {
                             anchors.verticalCenter: helpEntry.verticalCenter
                             text: helpEntry.modelData.label
                             font.family: Theme.fontUi
-                            font.pixelSize: Sizing.fontSize(2.5)
+                            font.pixelSize: Sizing.fontSize(2.6)
                             color: Theme.textPrimary
                             renderType: Text.NativeRendering
                         }
