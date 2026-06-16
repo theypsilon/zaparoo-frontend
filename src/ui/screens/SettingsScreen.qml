@@ -50,6 +50,8 @@ Item {
 
     readonly property string pageRoot: "root"
     readonly property string pageDisplayInterface: "displayInterface"
+    readonly property string pageBrowsing: "browsing"
+    readonly property string pageLanguage: "language"
     readonly property string pageControlsInput: "controlsInput"
     readonly property string pageLibraryData: "libraryData"
     readonly property string pageSupportAbout: "supportAbout"
@@ -83,6 +85,18 @@ Item {
         },
         {
             kind: "field",
+            id: "pageBrowsing",
+            label: qsTr("Browsing"),
+            coverKey: "icons/Browsing"
+        },
+        {
+            kind: "field",
+            id: "pageLanguage",
+            label: qsTr("Language"),
+            coverKey: "icons/Language"
+        },
+        {
+            kind: "field",
             id: "pageControlsInput",
             label: qsTr("Controls"),
             coverKey: "icons/Controls"
@@ -100,6 +114,8 @@ Item {
             coverKey: "icons/Support"
         }
     ]
+    // Display = video output only. Resolution is MiSTer-only (changes startup
+    // video config, applies on restart).
     readonly property var displayInterfaceFields: {
         const out = [];
         if (Browse.Settings.is_mister) {
@@ -116,41 +132,52 @@ Item {
         });
         out.push({
             kind: "field",
-            id: "browseLayout",
-            label: qsTr("Browsing layout")
-        });
-        out.push({
-            kind: "field",
-            id: "mediaImageType",
-            label: qsTr("Preferred artwork")
-        });
-        out.push({
-            kind: "field",
             id: "screensaverTimeout",
             label: qsTr("Screensaver")
         });
-        out.push({
+        return out;
+    }
+    // Browsing = how the library is presented and which items show.
+    readonly property var browsingFields: [
+        {
             kind: "field",
-            id: "clockFormat",
-            label: qsTr("Clock format")
-        });
-        out.push({
+            id: "browseLayout",
+            label: qsTr("Browsing layout")
+        },
+        {
             kind: "field",
-            id: "region",
-            label: qsTr("System names")
-        });
-        out.push({
-            kind: "field",
-            id: "language",
-            label: qsTr("Language")
-        });
-        out.push({
+            id: "mediaImageType",
+            label: qsTr("Preferred artwork")
+        },
+        {
             kind: "field",
             id: "showHidden",
             label: qsTr("Show hidden items")
-        });
-        return out;
-    }
+        },
+        {
+            kind: "field",
+            id: "showOriginalFilenames",
+            label: qsTr("Show original filenames")
+        }
+    ]
+    // Language = locale/regional preferences.
+    readonly property var languageFields: [
+        {
+            kind: "field",
+            id: "language",
+            label: qsTr("Language")
+        },
+        {
+            kind: "field",
+            id: "region",
+            label: qsTr("System names")
+        },
+        {
+            kind: "field",
+            id: "clockFormat",
+            label: qsTr("Clock format")
+        }
+    ]
     readonly property var controlsInputFields: [
         {
             kind: "field",
@@ -210,6 +237,10 @@ Item {
     readonly property var fields: {
         if (settings.currentPage === settings.pageDisplayInterface)
             return settings.displayInterfaceFields;
+        if (settings.currentPage === settings.pageBrowsing)
+            return settings.browsingFields;
+        if (settings.currentPage === settings.pageLanguage)
+            return settings.languageFields;
         if (settings.currentPage === settings.pageControlsInput)
             return settings.controlsInputFields;
         if (settings.currentPage === settings.pageLibraryData)
@@ -221,6 +252,10 @@ Item {
     readonly property string pageTitle: {
         if (settings.currentPage === settings.pageDisplayInterface)
             return qsTr("Display");
+        if (settings.currentPage === settings.pageBrowsing)
+            return qsTr("Browsing");
+        if (settings.currentPage === settings.pageLanguage)
+            return qsTr("Language");
         if (settings.currentPage === settings.pageControlsInput)
             return qsTr("Controls");
         if (settings.currentPage === settings.pageLibraryData)
@@ -353,9 +388,9 @@ Item {
     }
 
     function _fieldControl(id: string): string {
-        if (id === "mouseEnabled" || id === "showHidden" || id === "discoverArcadeAlternateVersions" || id === "debugLogging" || id === "rescrapeExisting" || id === "reduceMotion")
+        if (id === "mouseEnabled" || id === "showHidden" || id === "showOriginalFilenames" || id === "discoverArcadeAlternateVersions" || id === "debugLogging" || id === "rescrapeExisting" || id === "reduceMotion")
             return "toggle";
-        if (id === "aboutLicense" || id === "pageDisplayInterface" || id === "pageControlsInput" || id === "pageLibraryData" || id === "pageSupportAbout")
+        if (id === "aboutLicense" || id === "pageDisplayInterface" || id === "pageBrowsing" || id === "pageLanguage" || id === "pageControlsInput" || id === "pageLibraryData" || id === "pageSupportAbout")
             return "navigate";
         if (id === "updateMediaDb" || id === "runScraper" || id === "uploadLog")
             return "action";
@@ -371,6 +406,8 @@ Item {
             return settings._visibleRescrapeExisting;
         if (id === "showHidden")
             return Browse.Settings.current_show_hidden;
+        if (id === "showOriginalFilenames")
+            return Browse.Settings.current_show_original_filenames;
         if (id === "reduceMotion")
             return Browse.Settings.current_reduce_motion;
         return Browse.Settings.current_mouse_enabled;
@@ -417,8 +454,14 @@ Item {
         return from;
     }
 
-    readonly property int rootGridColumns: 5
     readonly property int rootGridRows: 2
+    // Columns track the (fixed) category count so the menu auto-balances into
+    // `rootGridRows` rows (six categories -> 3x2) instead of a hardcoded count.
+    // This is chrome with a known small item set, not content that should
+    // reflow with screen width; the cell geometry below is already
+    // sizing-driven (pctW/pctH with a maxCellSize cap), so the cells shrink to
+    // fit any screen while the layout stays a deliberate balanced grid.
+    readonly property int rootGridColumns: Math.ceil(settings.categoryFields.length / settings.rootGridRows)
 
     function _moveRootGrid(dx: int, dy: int): void {
         if (settings.fieldCount <= 0)
@@ -459,7 +502,7 @@ Item {
         if (!settings._isField(settings.currentIndex))
             return false;
         const id = settings.fields[settings.currentIndex].id;
-        return id === "mouseEnabled" || id === "showHidden" || id === "discoverArcadeAlternateVersions" || id === "debugLogging" || id === "rescrapeExisting" || id === "reduceMotion";
+        return id === "mouseEnabled" || id === "showHidden" || id === "showOriginalFilenames" || id === "discoverArcadeAlternateVersions" || id === "debugLogging" || id === "rescrapeExisting" || id === "reduceMotion";
     }
     // True when the focused field is a list-picker row (Accept opens a
     // modal; left/right is a no-op — pickers don't cycle inline). Drives
@@ -477,7 +520,7 @@ Item {
         if (!settings._isField(settings.currentIndex))
             return false;
         const id = settings.fields[settings.currentIndex].id;
-        return settings.focusedFieldIsPicker || id === "updateMediaDb" || id === "runScraper" || id === "uploadLog" || id === "aboutLicense" || id === "pageDisplayInterface" || id === "pageControlsInput" || id === "pageLibraryData" || id === "pageSupportAbout";
+        return settings.focusedFieldIsPicker || id === "updateMediaDb" || id === "runScraper" || id === "uploadLog" || id === "aboutLicense" || id === "pageDisplayInterface" || id === "pageBrowsing" || id === "pageLanguage" || id === "pageControlsInput" || id === "pageLibraryData" || id === "pageSupportAbout";
     }
     // Verb shown on the help-bar Accept hint for the focused action
     // row. Index/scrape flip between Start and Cancel because the press
@@ -832,6 +875,14 @@ Item {
         settings._reprojectBrowseModels();
     }
 
+    function _setShowOriginalFilenames(direction: int): void {
+        Browse.Settings.set_show_original_filenames(direction > 0);
+    }
+
+    function _toggleShowOriginalFilenames(): void {
+        Browse.Settings.set_show_original_filenames(!Browse.Settings.current_show_original_filenames);
+    }
+
     function _setMouseEnabled(direction: int): void {
         Browse.Settings.set_mouse_enabled(direction > 0);
     }
@@ -887,6 +938,8 @@ Item {
             settings._setMouseEnabled(direction);
         else if (id === "showHidden")
             settings._setShowHidden(direction);
+        else if (id === "showOriginalFilenames")
+            settings._setShowOriginalFilenames(direction);
         else if (id === "discoverArcadeAlternateVersions")
             settings._setDiscoverArcadeAlternateVersions(direction);
         else if (id === "debugLogging")
@@ -933,6 +986,10 @@ Item {
         let page = "";
         if (id === "pageDisplayInterface")
             page = settings.pageDisplayInterface;
+        else if (id === "pageBrowsing")
+            page = settings.pageBrowsing;
+        else if (id === "pageLanguage")
+            page = settings.pageLanguage;
         else if (id === "pageControlsInput")
             page = settings.pageControlsInput;
         else if (id === "pageLibraryData")
@@ -998,6 +1055,8 @@ Item {
                     settings._toggleMouseEnabled();
                 else if (id === "showHidden")
                     settings._toggleShowHidden();
+                else if (id === "showOriginalFilenames")
+                    settings._toggleShowOriginalFilenames();
                 else if (id === "discoverArcadeAlternateVersions")
                     settings._toggleDiscoverArcadeAlternateVersions();
                 else if (id === "debugLogging")
@@ -1287,6 +1346,8 @@ Item {
                                 settings._toggleMouseEnabled();
                             else if (row.modelData.id === "showHidden")
                                 settings._toggleShowHidden();
+                            else if (row.modelData.id === "showOriginalFilenames")
+                                settings._toggleShowOriginalFilenames();
                             else if (row.modelData.id === "discoverArcadeAlternateVersions")
                                 settings._toggleDiscoverArcadeAlternateVersions();
                             else if (row.modelData.id === "debugLogging")

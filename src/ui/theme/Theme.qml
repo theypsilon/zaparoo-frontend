@@ -32,8 +32,21 @@ QtObject {
     // Text
     readonly property color textPrimary: "#ffffff"
     readonly property color textLabel: "#888888"
+    // Variant/disambiguation suffix tone — a muted lavender-grey that reads as
+    // secondary metadata next to the title without competing with it, and
+    // stays legible on `surfaceCard` and on the CRT path. Drawn after the name
+    // in the inline caption (see `ScrollingCaption.qml`).
+    readonly property color textVariant: "#8a8ab2"
     // Accent — static warm amber used for selection highlights.
     readonly property color accent: "#FFB347"
+    // Persistent-state marker tint (favorite heart, hidden badge). Lavender,
+    // not the amber accent, so these markers stay distinct from the focus
+    // ring/logo tint instead of melting into them — amber means "selected"
+    // exclusively. Paired with a dark `bgBar` outline/border for visibility on
+    // light cover art. The hidden badge uses it directly (TileBadge); the
+    // favorite heart is tinted to it on the fly via the tinted-svg provider
+    // (Heart.svg is a neutral grayscale source), so the color lives only here.
+    readonly property color stateMarker: "#9898CC"
     // System logo tint tokens — two ramps, selected by Tile based on focus state.
     // Inactive ramp: medium purple so unfocused tiles read as secondary
     // against the amber focused ramp. Was near-white (#E4E4F6) which
