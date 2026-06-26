@@ -15,6 +15,7 @@ ENV_FILE="${PROJECT_ROOT}/.env"
 REMOTE_PATH="/media/fat/zaparoo/frontend"
 BINARY="${PROJECT_ROOT}/output/frontend"
 SKIP_BUILD=0
+LOCAL_TOOLCHAIN=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -22,16 +23,21 @@ while [ "$#" -gt 0 ]; do
             SKIP_BUILD=1
             shift
             ;;
+        --local-toolchain)
+            LOCAL_TOOLCHAIN=1
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--skip-build]"
+            echo "Usage: $0 [--skip-build] [--local-toolchain]"
             echo ""
             echo "Builds output/frontend and deploys it to MiSTer."
-            echo "  --skip-build  Deploy existing output/frontend without rebuilding"
+            echo "  --skip-build       Deploy existing output/frontend without rebuilding"
+            echo "  --local-toolchain  Build with the local Docker toolchain image"
             exit 0
             ;;
         *)
             echo "Error: unknown argument: $1" >&2
-            echo "Usage: $0 [--skip-build]" >&2
+            echo "Usage: $0 [--skip-build] [--local-toolchain]" >&2
             exit 1
             ;;
     esac
@@ -43,15 +49,40 @@ if [ ! -f "${ENV_FILE}" ]; then
     exit 1
 fi
 
-set -a
 # shellcheck source=/dev/null
 source "${ENV_FILE}"
-set +a
 
 if [ -z "${MISTER_IP}" ]; then
     echo "Error: MISTER_IP is not set in ${ENV_FILE}"
     exit 1
 fi
+
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new)
+USE_SSHPASS=0
+if [ -n "${MISTER_PW:-}" ]; then
+    if ! command -v sshpass > /dev/null 2>&1; then
+        echo "Error: MISTER_PW is set in ${ENV_FILE}, but sshpass is not installed." >&2
+        echo "Install sshpass or remove MISTER_PW to use SSH keys/password prompts." >&2
+        exit 1
+    fi
+    USE_SSHPASS=1
+fi
+
+run_ssh() {
+    if [ "${USE_SSHPASS}" -eq 1 ]; then
+        SSHPASS="${MISTER_PW}" sshpass -e ssh "${SSH_OPTS[@]}" "$@"
+    else
+        ssh "${SSH_OPTS[@]}" "$@"
+    fi
+}
+
+run_scp() {
+    if [ "${USE_SSHPASS}" -eq 1 ]; then
+        SSHPASS="${MISTER_PW}" sshpass -e scp "${SSH_OPTS[@]}" "$@"
+    else
+        scp "${SSH_OPTS[@]}" "$@"
+    fi
+}
 
 if [ "${SKIP_BUILD}" -eq 1 ]; then
     echo "=== Skipping ARM32 build ==="
@@ -61,7 +92,11 @@ if [ "${SKIP_BUILD}" -eq 1 ]; then
     fi
 else
     echo "=== Building ARM32 binary ==="
-    "${SCRIPT_DIR}/build-arm32.sh"
+    if [ "${LOCAL_TOOLCHAIN}" -eq 1 ]; then
+        USE_LOCAL_TOOLCHAIN=1 "${SCRIPT_DIR}/build-arm32.sh"
+    else
+        "${SCRIPT_DIR}/build-arm32.sh"
+    fi
 fi
 
 echo ""
@@ -77,9 +112,9 @@ echo "=== Deploying to MiSTer at ${MISTER_IP} ==="
 # `wc -c` is portable (GNU + BSD/macOS); `stat -c` is GNU-only. The remote
 # size check below runs on the MiSTer (always Linux) so it keeps `stat -c`.
 LOCAL_SIZE="$(wc -c < "${BINARY}" | tr -d '[:space:]')"
-scp "${BINARY}" "root@${MISTER_IP}:${REMOTE_PATH}.new"
+run_scp "${BINARY}" "root@${MISTER_IP}:${REMOTE_PATH}.new"
 
-ssh "root@${MISTER_IP}" "
+run_ssh "root@${MISTER_IP}" "
     set -e
     new_size=\$(stat -c %s '${REMOTE_PATH}.new' 2>/dev/null || echo 0)
     if [ \$new_size -ne ${LOCAL_SIZE} ]; then
@@ -96,7 +131,7 @@ ssh "root@${MISTER_IP}" "
 "
 echo "Deployed ${BINARY} → root@${MISTER_IP}:${REMOTE_PATH}"
 
-ssh "root@${MISTER_IP}" "
+run_ssh "root@${MISTER_IP}" "
     rm -f /tmp/zaparoo/frontend.log
     # Flush pending card writes before disrupting the frontend so it is never
     # pulled mid-write. The signal stays SIGKILL on purpose: MiSTer's wrapper
